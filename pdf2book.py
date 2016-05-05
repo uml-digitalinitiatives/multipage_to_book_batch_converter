@@ -14,6 +14,9 @@ import subprocess
 import time
 import PyPDF2
 import html
+import shutil
+import lxml.etree as ET
+import copy
 
 '''logger placeholder'''
 logger = None
@@ -35,18 +38,27 @@ htmlmatch = re.compile(r'<[^>]+>', re.MULTILINE|re.DOTALL)
 '''Regex - Match blank lines/characters'''
 blanklines = re.compile(r'^[\x01|\x0a|\s]*$', re.MULTILINE)
 
-'''Parse a PDF and produce derivatives
-
-Keyword arguments
-pdf -- The full path to the PDF file
-'''
 def processPdf(pdf):
+    '''Parse a PDF and produce derivatives
+
+    Keyword arguments
+    pdf -- The full path to the PDF file
+    '''
     logger.info("Processing {}".format(pdf))
     # Check for an existing directory
-    book_name = os.path.splitext(pdf)[0]
+    book_name = os.path.splitext(os.path.split(pdf)[1])[0]
     book_dir = os.path.join(os.path.dirname(pdf), book_name + '_dir')
+    mods_file = None
     if not os.path.exists(book_dir):
         os.mkdir(book_dir)
+    if options.mods_dir is not None:
+        tmpfile = os.path.join(options.mods_dir, book_name + '.mods')
+        logger.debug("We have a MODS directory to use {}, look for file {}".format(options.mods_dir, tmpfile))
+        if os.path.exists(tmpfile) and os.path.isfile(tmpfile):
+            logger.debug("Found file {} and it is a file.".format(tmpfile))
+            mods_file = os.path.join(book_dir, 'MODS.xml')
+            logger.debug("copy file to {} and set that as mods_file".format(mods_file))
+            shutil.copyfile(tmpfile, mods_file)
 
     pages = countPages(pdf)
     logger.debug("counted {} pages in {}".format(pages, pdf))
@@ -61,15 +73,19 @@ def processPdf(pdf):
         tiffFile = getTiff(newPdf, outDir)
         hocrFile = getHocr(tiffFile, outDir)
         getOcr(tiffFile, hocrFile, outDir)
+        if mods_file is not None:
+            logger.debug("We have a mods_file.")
+            # Copy mods file and insert 
+            makePageMods(filename=mods_file, output_dir=os.path.join(book_dir, outDir), page=p)
 
 
-'''Produce a single page Tiff from a single page PDF
-
-Keyword arguments
-newPdf -- The full path to the PDF file
-outDir -- The directory to save the single page Tiff to
-'''
 def getTiff(newPdf, outDir):
+    '''Produce a single page Tiff from a single page PDF
+
+    Keyword arguments
+    newPdf -- The full path to the PDF file
+    outDir -- The directory to save the single page Tiff to
+    '''
     logger.debug("in getTiff")
     device = 'tiff32nc'
     resolution = options.resolution
@@ -90,16 +106,16 @@ def getTiff(newPdf, outDir):
     return output_file
             
 
-'''Produce a single page PDF from a multi-page PDF
-
-Keyword arguments
-pdf -- The full path to the PDF file
-page -- The page to extract
-outDir -- The directory to save the single page PDF to
-
-Returns the path to the new PDF file
-'''
 def getPdfPage(pdf, page, outDir):
+    '''Produce a single page PDF from a multi-page PDF
+
+    Keyword arguments
+    pdf -- The full path to the PDF file
+    page -- The page to extract
+    outDir -- The directory to save the single page PDF to
+
+    Returns the path to the new PDF file
+    '''
     output_file = os.path.join(outDir, 'PDF.pdf')
     if os.path.exists(output_file) and os.path.isfile(output_file) and options.overwrite:
         # Delete the file if it exists AND we set --overwrite
@@ -115,14 +131,14 @@ def getPdfPage(pdf, page, outDir):
             quit()
     return output_file
 
-'''Which way to get OCR.
-
-Keyword arguments
-tiffFile -- Tiff file to process from
-hocrFile -- Hocr file to extract from
-outDir -- Directory to write OCR file to.
-'''
 def getOcr(tiffFile, hocrFile, outDir):
+    '''Which way to get OCR.
+
+    Keyword arguments
+    tiffFile -- Tiff file to process from
+    hocrFile -- Hocr file to extract from
+    outDir -- Directory to write OCR file to.
+    '''
     if tiffFile is not None and os.path.exists(tiffFile) and os.path.isfile(tiffFile) and not options.use_hocr:
         processOCR(tiffFile, outDir)
     elif hocrFile is not None and os.path.exists(hocrFile) and os.path.isfile(hocrFile) and options.use_hocr:
@@ -130,13 +146,13 @@ def getOcr(tiffFile, hocrFile, outDir):
     else:
         logger.error("Unable to generate OCR")
 
-'''Extract OCR from the Hocr data
-
-Keyword arguments
-hocrFile -- The HOCR file
-outDir -- Directory to write OCR file to.
-'''
 def getOcrFromHocr(hocrFile, outDir):
+    '''Extract OCR from the Hocr data
+
+    Keyword arguments
+    hocrFile -- The HOCR file
+    outDir -- Directory to write OCR file to.
+    '''
     output_file = os.path.join(outDir, 'OCR.txt')
     if os.path.exists(output_file) and os.path.isfile(output_file) and options.overwrite:
         os.remove(output_file)
@@ -150,13 +166,12 @@ def getOcrFromHocr(hocrFile, outDir):
         with open(output_file, 'w') as fpw:            
             fpw.write(data)        
         
-        
-'''Get the OCR from a Tiff file.
-
-Keyword arguments
-tiffFile -- The TIFF image
-outDir -- The output directory'''
 def processOCR(tiffFile, outDir):
+    '''Get the OCR from a Tiff file.
+
+    Keyword arguments
+    tiffFile -- The TIFF image
+    outDir -- The output directory'''
     output_file = os.path.join(outDir, 'OCR');
     if os.path.exists(output_file) and os.path.isfile(output_file) and options.overwrite:
         os.remove(output_file)
@@ -167,12 +182,12 @@ def processOCR(tiffFile, outDir):
         if not doSystemCall(op):
             quit()
         
-'''Get the HOCR from a Tiff file.
-
-Keyword arguments
-tiffFile -- The TIFF image
-outDir -- The output directory'''
 def getHocr(tiffFile, outDir):
+    '''Get the HOCR from a Tiff file.
+
+    Keyword arguments
+    tiffFile -- The TIFF image
+    outDir -- The output directory'''
     output_stub = os.path.join(outDir, 'HOCR');
     output_file = output_stub + '.hocr'
     if os.path.exists(output_file) and os.path.isfile(output_file) and options.overwrite:
@@ -185,12 +200,65 @@ def getHocr(tiffFile, outDir):
             quit()
     return output_file
 
-'''Execute an external system call
-
-Keyword arguments
-ops -- a list of the executable and any arguments.
-'''
+def makePageMods(filename, output_dir, page):
+    '''Using a Book level MODS record insert the relatedItem/part information
+    
+    Keyword arguments
+    filename -- The filename of the top level MODS file
+    output_dir -- The page level directory to save the MODS to
+    page -- The page number'''
+    mods_namespace = '{http://www.loc.gov/mods/v3}'
+    logger.debug("In makePageMods")
+    if os.path.exists(filename) and os.path.isfile(filename):
+        logger.debug("Have file {}".format(filename))
+        try:
+            tree = ET.parse(filename)
+        except:
+            logger.error("Error parsing MODS in file {}: {}".format(filename, sys.exc_info()[0]))
+            return
+        related = tree.find("{0}relatedItem[@type=\"host\"]".format(mods_namespace))
+        if related is None:
+            root = tree.getroot()
+            related = ET.SubElement(root, "{0}relatedItem".format(mods_namespace), {'type' : 'host'})
+        if related.find("{0}titleInfo/{0}title".format(mods_namespace)) is None:
+            title = tree.find("{0}titleInfo/{0}title".format(mods_namespace))
+            if title is None:
+                logger.warning("Unable to locate the title page {}".format(page))
+            else:
+                tmp = ET.Element("{0}titleInfo".format(mods_namespace))
+                tmp.append(copy.deepcopy(title))
+                related.append(tmp)
+                logger.debug("Copied titleInfo to relatedItem, now add page number to top level titleInfo/title")
+                title.text = title.text + ' (Page {})'.format(page)
+        part = related.find("{0}path".format(mods_namespace))
+        if part is None:
+            part = ET.SubElement(related, '{0}part'.format(mods_namespace))
+        extent = part.find("{0}extent[@unit=\"pages\"]".format(mods_namespace))
+        if extent is None:
+            extent = ET.SubElement(part, "{0}extent".format(mods_namespace), {'unit' : 'pages'})
+        start = extent.find("./{0}start".format(mods_namespace))
+        if start is not None:
+            start.getparent().remove(start)
+        start = ET.SubElement(extent, '{0}start'.format(mods_namespace))
+        start.text = str(page)
+        end = extent.find('./{0}end'.format(mods_namespace))
+        if end is not None:
+            end.getparent().remove(end)
+        end = ET.SubElement(extent, '{0}end'.format(mods_namespace))
+        end.text = str(page)
+        try:
+            tree.write(os.path.join(output_dir, 'MODS.xml'), encoding='utf-8', xml_declaration=True, method='xml')
+        except IOError as e:
+            logger.error("Error writing out page level MODS to directory {}: {}".format(output_dir, e.getMessage()))
+            
+            
+        
 def doSystemCall(ops):
+    '''Execute an external system call
+
+    Keyword arguments
+    ops -- a list of the executable and any arguments.
+    '''
     try:
         process = subprocess.Popen(ops, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
@@ -206,13 +274,12 @@ def doSystemCall(ops):
         return False
     return True
 
-
-'''Count the number of pages in a PDF
-
-Keyword arguments
-pdf -- the full path to the PDF file
-'''
 def countPages(pdf):
+    '''Count the number of pages in a PDF
+
+    Keyword arguments
+    pdf -- the full path to the PDF file
+    '''
     count = 0
     with open(pdf, 'rb') as fp:
         count += len(rxcountpages.findall(fp.read()))
@@ -221,24 +288,23 @@ def countPages(pdf):
         count = pdfRead.getNumPages()
         pdfRead = None
     return count
-    
 
-'''Act on all PDFs in a directory, not recursing down.
-
-Keyword arguments
-theDir -- The full path to the directory to operate on
-'''   
 def parseDir(theDir):
+    '''Act on all PDFs in a directory, not recursing down.
+
+    Keyword arguments
+    theDir -- The full path to the directory to operate on
+    '''
     files = [f for f in os.listdir(theDir) if re.search('.*\.pdf$', f)]
     for f in files: 
         processPdf(os.path.join(theDir, f))
 
-'''Do setup functions
-
-Keyword arguments
-args -- the ArgumentParser object
-'''
 def setUp(args):
+    '''Do setup functions
+
+    Keyword arguments
+    args -- the ArgumentParser object
+    '''
     global options
     options = args
     setupLog()
@@ -249,8 +315,8 @@ def setUp(args):
         print("A required program could not be found: {}".format(e.strerror.split(':')[1]))
         quit()
 
-'''Setup logging'''
 def setupLog():
+    '''Setup logging'''
     global logger
     logger = logging.getLogger('pdf2book')
     logger.propogate = False
@@ -261,16 +327,14 @@ def setupLog():
     fh.setFormatter(formatter)
     logger.addHandler(fh)
     
-
-'''Format seconds '''
 def formatTime(seconds):
+    '''Format seconds '''
     m, s = divmod(seconds, 60)
     h, m = divmod(m, 60)
     return "%d:%02d:%02d" % (h, m, s)
-    
-    
-'''The main body of code'''
-def main():    
+
+def main():
+    '''The main body of code'''
     start_time = time.perf_counter()
     
     parser = argparse.ArgumentParser(description='Turn a PDF or set of PDFs into properly formatted directories for Islandora Book Batch.')
@@ -280,12 +344,21 @@ def main():
     parser.add_argument('--language', dest="language", default='eng', help="Language of the source material, used for OCRing. Defaults to eng.")
     parser.add_argument('--resolution', dest="resolution", type=int, default=300, help="Resolution of the source material, used when generating Tiff. Defaults to 300.")
     parser.add_argument('--use-hocr', dest="use_hocr", action='store_true', default=False, help='Generate OCR by stripping HTML characters from HOCR, otherwise run tesseract. Defaults to use tesseract.')
+    parser.add_argument('--mods-dir', dest="mods_dir", default=None, help="Directory of files with a matching name but with the extension '.mods' to be added to the books.")
     parser.add_argument('-d', '--debug', dest="debug_level", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], default='ERROR', help='Set logging level, defaults to ERROR.')
     args = parser.parse_args()
 
     if not args.files[0] == '/':
         # Relative filepath
         args.files = os.path.join(os.getcwd(), args.files)
+    
+    if args.mods_dir is not None:
+        if not args.mods_dir[0] == '/':
+            # Relative directory
+            args.mods_dir = os.path.abspath(args.mods_dir)
+        if not (os.path.exists(args.mods_dir) or os.path.isdir(args.mods_dir)):
+            parser.error("--mods-dir was not found or is not a directory.")
+            quit()
         
     if os.path.isfile(args.files) and os.path.splitext(args.files)[1] == '.pdf':
         setUp(args)
