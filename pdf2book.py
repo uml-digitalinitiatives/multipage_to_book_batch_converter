@@ -127,28 +127,36 @@ def makeJpeg2000(tiffFile, outDir):
     #loseless = (size['height'] < 1024 or size['width'] < 1024 or res['x'] < 300 or res['y'] < 300)
     loseless = True
     justFile = os.path.split(tiffFile)[1]
-    outFile = os.path.join(outDir, 'JP2.jp2')
-    if isCompressed(tiffFile):
-        newFile = os.path.join(os.path.dirname(tiffFile), os.path.splitext(justFile)[0] + "_tmp" + os.path.splitext(justFile)[1])
-        op = ['convert', '-compress', 'None', tiffFile, newFile]
-        doSystemCall(op)
-    else:
-        newFile = tiffFile
-    if getBitDepth(tiffFile) > 8:
-        # Use Kakadu
-        op = ['kdu_compress', '-i', newFile, '-o', outFile]
-        if loseless:
-            # Do loseless
-            op.extend(['Creversible=yes', '-rate', '-,1,0.5,0.25', 'Clevels=5'])
-        else:
-            op.extend(['-rate', '0.5', 'Clayers=1', 'Clevels=7', 'Cprecincts={256,256},{256,256},{256,256},{128,128},{128,128},{64,64},{64,64},{32,32},{16,16}', 'Corder=RPCL', 'ORGgen_plt=yes', 'ORGtparts=R', 'Cblk={32,32}', 'Cuse_sop=yes'])
-    else:
-        # Use ImageMagick
-        op = ['convert']
-        op.extend(imageMagickOpts(loseless))
-        op.extend([newFile, outFile])
+    output_file = os.path.join(outDir, 'JP2.jp2')
+    
+    if os.path.exists(output_file) and os.path.isfile(output_file) and options.overwrite:
+        os.remove(output_file)
+        logger.debug("{} exists and we are deleting it.".format(output_file))
 
-    doSystemCall(op)
+    if not os.path.exists(output_file):
+        logger.debug("Generating Jpeg2000")
+
+        if isCompressed(tiffFile):
+            newFile = os.path.join(os.path.dirname(tiffFile), os.path.splitext(justFile)[0] + "_tmp" + os.path.splitext(justFile)[1])
+            op = ['convert', '-compress', 'None', tiffFile, newFile]
+            doSystemCall(op)
+        else:
+            newFile = tiffFile
+        if getBitDepth(tiffFile) > 8:
+            # Use Kakadu
+            op = ['kdu_compress', '-i', newFile, '-o', output_file]
+            if loseless:
+                # Do loseless
+                op.extend(['Creversible=yes', '-rate', '-,1,0.5,0.25', 'Clevels=5'])
+            else:
+                op.extend(['-rate', '0.5', 'Clayers=1', 'Clevels=7', 'Cprecincts={256,256},{256,256},{256,256},{128,128},{128,128},{64,64},{64,64},{32,32},{16,16}', 'Corder=RPCL', 'ORGgen_plt=yes', 'ORGtparts=R', 'Cblk={32,32}', 'Cuse_sop=yes'])
+        else:
+            # Use ImageMagick
+            op = ['convert']
+            op.extend(imageMagickOpts(loseless))
+            op.extend([newFile, output_file])
+
+        doSystemCall(op)
 
     if newFile != tiffFile:
         # If we made an uncompressed copy, delete it.
@@ -157,23 +165,27 @@ def makeJpeg2000(tiffFile, outDir):
 def makeJpeg(tiffFile, outDir, outName, height=None, width=None):
     '''Make a Jpeg of max size height x width'''
 
-    logger.debug("Creating JPEG with size {}x{}".format(width, height))
-
     op = ['convert']
 
-    outFile = os.path.join(outDir, outName + '.jpg')
+    output_file = os.path.join(outDir, outName + '.jpg')
 
-    if height is not None or width is not None:
-        op.append('-resize')
-        if height is not None and width is not None:
-            op.append("{}x{}".format(width, height))
-        elif width is not None:
-            op.append(width)
-        else:
-            op.append("x{}".format(height))
-    op.extend([tiffFile, outFile])
+    if os.path.exists(output_file) and os.path.isfile(output_file) and options.overwrite:
+        os.remove(output_file)
+        logger.debug("{} exists and we are deleting it.".format(output_file))
 
-    doSystemCall(op)
+    if not os.path.exists(output_file):
+        logger.debug("Creating JPEG with size maximum width and height {}x{}".format(width, height))
+        if height is not None or width is not None:
+            op.append('-resize')
+            if height is not None and width is not None:
+                op.append("{}x{}".format(width, height))
+            elif width is not None:
+                op.append(width)
+            else:
+                op.append("x{}".format(height))
+        op.extend([tiffFile, outFile])
+
+        doSystemCall(op)
 
 def imageMagickOpts(lossless=False):
     '''Stores and returns the Kakadu JP2 creation args'''
@@ -209,9 +221,9 @@ def isCompressed(imageFile):
 
 def getBitDepth(imageFile):
     '''Return the bit depth'''
-    logger.debug("Getting the bit depth for {}".format(imageFile))
     op = ['identify', '-format', '%[depth]', imageFile]
     result = doSystemCall(ops=op, returnResult=True)
+    logger.debug("Getting the bit depth ({}) for {}".format(result, imageFile))
     return int(result)
 
 
@@ -226,10 +238,12 @@ def getImageSize(imageFile):
 def getImageResolution(imageFile):
     '''Return a dict of the X and Y resolutions of the image'''
     logger.debug("Getting the resolutions of {}".format(imageFile))
-    op = ['identify', '-format', '%[x]-%[y]', imageFile]
+    op = ['identify', '-format', '%x-%y', imageFile]
     result = doSystemCall(ops=op, returnResult=True)
+    if result.lower().find("undefined"):
+        result = result.lower().replace("undefined", "")
     res_list = result.split('-')
-    return {'x' : int(res_list[0]), 'y' : int(res_list[1])}
+    return {'x' : int(res_list[0].strip()), 'y' : int(res_list[1].strip())}
 
 
 def getPdfPage(pdf, page, outDir):
