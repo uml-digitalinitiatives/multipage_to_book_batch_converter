@@ -17,7 +17,6 @@ import html
 import shutil
 import lxml.etree as ET
 import copy
-import wand.image
 
 '''logger placeholder'''
 logger = None
