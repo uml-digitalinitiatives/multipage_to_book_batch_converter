@@ -164,7 +164,7 @@ def makeJpeg2000(tiffFile, outDir):
 def makeJpeg(tiffFile, outDir, outName, height=None, width=None):
     '''Make a Jpeg of max size height x width'''
 
-    op = ['convert']
+    op = ['convert', tiffFile]
 
     output_file = os.path.join(outDir, outName + '.jpg')
 
@@ -182,7 +182,7 @@ def makeJpeg(tiffFile, outDir, outName, height=None, width=None):
                 op.append(width)
             else:
                 op.append("x{}".format(height))
-        op.extend([tiffFile, outFile])
+        op.append(output_file)
 
         doSystemCall(op)
 
@@ -216,12 +216,13 @@ def isCompressed(imageFile):
     logger.debug("Checking compression for {}".format(imageFile))
     op = ['identify', '-format', '%[C]', imageFile]
     result = doSystemCall(ops=op, returnResult=True)
-    return result != "None"
+    return result.rstrip('\r\n') != "None"
 
 def getBitDepth(imageFile):
     '''Return the bit depth'''
     op = ['identify', '-format', '%[depth]', imageFile]
     result = doSystemCall(ops=op, returnResult=True)
+    result = result.rstrip('\r\n')
     logger.debug("Getting the bit depth ({}) for {}".format(result, imageFile))
     return int(result)
 
@@ -231,7 +232,7 @@ def getImageSize(imageFile):
     logger.debug("Getting the height and width of {}".format(imageFile))
     op = ['identify', '-format', '%[height]-%[width]', imageFile]
     result = doSystemCall(ops=op, returnResult=True)
-    res_list = result.split('-')
+    res_list = result.rstrip('\r\n').split('-')
     return {'height' : int(res_list[0]), 'width' : int(res_list[1])}
 
 def getImageResolution(imageFile):
@@ -239,6 +240,7 @@ def getImageResolution(imageFile):
     logger.debug("Getting the resolutions of {}".format(imageFile))
     op = ['identify', '-format', '%x-%y', imageFile]
     result = doSystemCall(ops=op, returnResult=True)
+    result = result.rstrip('\r\n')
     if result.lower().find("undefined"):
         result = result.lower().replace("undefined", "")
     res_list = result.split('-')
