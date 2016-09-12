@@ -49,7 +49,17 @@ def processPdf(pdf):
     logger.info("Processing {}".format(pdf))
     # Check for an existing directory
     book_name = os.path.splitext(os.path.split(pdf)[1])[0]
-    book_dir = os.path.join(os.path.dirname(pdf), book_name + '_dir')
+    if options.output_dir != '.':
+      if options.output_dir[0:1] == '/' and os.path.exists(options.output_dir):
+        book_dir = os.path.join(options.output_dir, book_name + '_dir')
+      elif options.output_dir[0:1] != '/' and os.path.exists(os.path.join(os.getcwd(), options.output_dir)):
+        book_dir = os.path.join(os.getcwd(), options.output_dir, book_name + '_dir')
+    try:
+      if book_dir is not None:
+        logger.debug("Output directory was set to {}".format(book_dir))
+    except UnboundLocalError:
+      # not set, so use old default
+      book_dir = os.path.join(os.path.dirname(pdf), book_name + '_dir')
     mods_file = None
     if not os.path.exists(book_dir):
         os.mkdir(book_dir)
@@ -315,13 +325,14 @@ def processOCR(tiffFile, outDir):
     Keyword arguments
     tiffFile -- The TIFF image
     outDir -- The output directory'''
-    output_file = os.path.join(outDir, 'OCR');
+    output_file = os.path.join(outDir, 'OCR.txt');
+    output_stub = os.path.join(outDir, 'OCR');
     if os.path.exists(output_file) and os.path.isfile(output_file) and options.overwrite:
         os.remove(output_file)
         logger.debug("{} exists and we are deleting it.".format(output_file))
     if not os.path.exists(output_file):
         logger.debug("Generating OCR.")
-        op = ['tesseract', tiffFile, output_file, '-l', options['language']]
+        op = ['tesseract', tiffFile, output_stub, '-l', options.language]
         if not doSystemCall(op):
             quit()
         
@@ -503,6 +514,7 @@ def main():
     parser.add_argument('--resolution', dest="resolution", type=int, default=300, help="Resolution of the source material, used when generating Tiff. Defaults to 300.")
     parser.add_argument('--use-hocr', dest="use_hocr", action='store_true', default=False, help='Generate OCR by stripping HTML characters from HOCR, otherwise run tesseract. Defaults to use tesseract.')
     parser.add_argument('--mods-dir', dest="mods_dir", default=None, help="Directory of files with a matching name but with the extension '.mods' to be added to the books.")
+    parser.add_argument('--output-dir', dest="output_dir", default=".", help="Directory to build books in, defaults to current directory.")
     parser.add_argument('-d', '--debug', dest="debug_level", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], default='ERROR', help='Set logging level, defaults to ERROR.')
     args = parser.parse_args()
 
