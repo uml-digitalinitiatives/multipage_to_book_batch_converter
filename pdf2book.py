@@ -82,10 +82,11 @@ def processPdf(pdf):
             logger.debug("Creating directory for page {} in {}".format(p, book_dir))
             os.mkdir(os.path.join(book_dir, outDir))
         newPdf = getPdfPage(pdf, p, outDir)
-        tiffFile = getTiff(newPdf, outDir)
-        hocrFile = getHocr(tiffFile, outDir)
-        getOcr(tiffFile, hocrFile, outDir)
-        getJpegs(tiffFile, outDir)
+        if not options.skip_derivatives:
+          tiffFile = getTiff(newPdf, outDir)
+          hocrFile = getHocr(tiffFile, outDir)
+          getOcr(tiffFile, hocrFile, outDir)
+          getJpegs(tiffFile, outDir)
         if mods_file is not None:
             logger.debug("We have a mods_file.")
             # Copy mods file and insert 
@@ -515,6 +516,7 @@ def main():
     parser.add_argument('--use-hocr', dest="use_hocr", action='store_true', default=False, help='Generate OCR by stripping HTML characters from HOCR, otherwise run tesseract. Defaults to use tesseract.')
     parser.add_argument('--mods-dir', dest="mods_dir", default=None, help="Directory of files with a matching name but with the extension '.mods' to be added to the books.")
     parser.add_argument('--output-dir', dest="output_dir", default=".", help="Directory to build books in, defaults to current directory.")
+    parser.add_argument('--skip-derivatives', dest="skip_derivatives", action='store_true', default=False, help="Only split the PDF into the separate pages and directories, don't generate derivatives.")
     parser.add_argument('-d', '--debug', dest="debug_level", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], default='ERROR', help='Set logging level, defaults to ERROR.')
     args = parser.parse_args()
 
