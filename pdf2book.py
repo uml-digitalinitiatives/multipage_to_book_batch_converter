@@ -80,6 +80,8 @@ def processPdf(pdf):
             logger.debug("We have a mods_file.")
             # Copy mods file and insert 
             makePageMods(filename=mods_file, output_dir=os.path.join(book_dir, outDir), page=p)
+    # Last copy the original PDF to the book level as PDF.pdf
+    shutil.copy(pdf, os.path.join(book_dir, 'PDF.pdf'))
 
 
 def getTiff(newPdf, outDir):
@@ -157,9 +159,9 @@ def makeJpeg2000(tiffFile, outDir):
 
         doSystemCall(op)
 
-    if newFile != tiffFile:
-        # If we made an uncompressed copy, delete it.
-        os.remove(newFile)
+        if newFile != tiffFile:
+            # If we made an uncompressed copy, delete it.
+            os.remove(newFile)
 
 def makeJpeg(tiffFile, outDir, outName, height=None, width=None):
     '''Make a Jpeg of max size height x width'''
@@ -330,7 +332,8 @@ def getHocr(tiffFile, outDir):
     tiffFile -- The TIFF image
     outDir -- The output directory'''
     output_stub = os.path.join(outDir, 'HOCR');
-    output_file = output_stub + '.hocr'
+    tmp_file = output_stub + '.hocr'
+    output_file = output_stub + '.html'
     if os.path.exists(output_file) and os.path.isfile(output_file) and options.overwrite:
         os.remove(output_file)
         logger.debug("{} exists and we are deleting it.".format(output_file))
@@ -339,6 +342,11 @@ def getHocr(tiffFile, outDir):
         op = ['tesseract', tiffFile, output_stub, '-l', options.language, 'hocr']
         if not doSystemCall(op):
             quit()
+        os.rename(tmp_file, output_file)
+        if os.path.exists(output_stub + '.txt') and options.use_hocr:
+            # Some tesseracts seem to generate OCR at the same time as HOCR,
+            # so lets move it to OCR if we are going to create OCR from HOCR.
+            os.rename(output_stub + '.txt', os.path.join(outDir, 'OCR.txt'))
     return output_file
 
 def makePageMods(filename, output_dir, page):
