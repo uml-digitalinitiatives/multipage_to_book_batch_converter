@@ -99,7 +99,7 @@ It has been modified to:
 
 ### Maintainer
 
-[https://github.com/whikloj](Jared Whiklo)
+[Jared Whiklo](https://github.com/whikloj)
 
 ### License
 
