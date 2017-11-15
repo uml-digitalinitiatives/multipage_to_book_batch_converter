@@ -16,7 +16,7 @@ import time
 import PyPDF2
 import html
 import shutil
-import xml.etree.ElementTree as ET
+import lxml.etree as ET
 import copy
 
 sys.path.append(os.path.dirname(__file__))
@@ -485,7 +485,7 @@ def make_page_mods(filename, output_dir, page):
         end = ET.SubElement(extent, '{0}end'.format(mods_namespace))
         end.text = str(page)
         # Remove the book level page count
-        phys_desc = tree.find("{0}physicalDescription/{0}extent[@unit=\"page\"]".format(mods_namespace))
+        phys_desc = tree.find("{0}physicalDescription/{0}extent[@unit=\"pages\"]".format(mods_namespace))
         if phys_desc is not None:
             phys_desc.getparent().remove(phys_desc)
 
@@ -573,7 +573,7 @@ def set_up(args):
         test_progams = required_programs
     else:
         test_programs = required_programs
-        test_programs.append(derivative_programs)
+        test_programs.extend(derivative_programs)
 
         try:
             for prog in test_programs:
