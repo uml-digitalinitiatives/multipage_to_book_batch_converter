@@ -10,7 +10,8 @@ import sys
 import os
 import argparse
 import re
-import logging, logging.config
+import logging
+import logging.config
 import subprocess
 import time
 import PyPDF2
@@ -314,7 +315,9 @@ def get_image_resolution(image_file):
     if result.lower().find("undefined"):
         result = result.lower().replace("undefined", "")
     res_list = result.split('-')
-    return {'x': int(res_list[0].strip()), 'y': int(res_list[1].strip())}
+    res_list = [int(re.search(r'\d+', value).group(0)) for value in res_list]
+    logger.debug("Image resolution is " + str(res_list))
+    return {'x': res_list[0], 'y': res_list[1]}
 
 
 def get_pdf_page(pdf, page, out_dir):
@@ -519,6 +522,7 @@ def do_system_call(ops, return_result=False):
             "Error executing command: \n{}\nMessage: {}\nOutput: {}\nSTDOUT: ".format(e.cmd, e.stderr, e.output,
                                                                                       e.stdout))
         return False
+    logger.debug("Command result:\n{}".format(outs))
     if return_result:
         return outs
     else:
@@ -541,9 +545,9 @@ def count_pages(input_file):
             pdf_read = None
     else:
         ops = [
-            'identify', '-ping', '-format', "%n\n", input_file
+            'identify', '-ping', '-format', "%n\\n", input_file
         ]
-        results = do_system_call(ops, True)
+        results = do_system_call(ops, return_result=True)
         count = int(results.rstrip().split('\n').pop())
 
     return count
@@ -591,7 +595,8 @@ def setup_log():
     logger.propogate = False
     # Logging Level 
     eval('logger.setLevel(logging.{})'.format(options.debug_level))
-    fh = logging.FileHandler(os.path.join(os.path.dirname(os.getcwd()), 'multipage2book.log'), 'w', 'utf-8')
+    filename = os.path.join(os.getcwd(), 'multipage2book.log')
+    fh = logging.FileHandler(filename, 'w', 'utf-8')
     formatter = logging.Formatter('%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
     fh.setFormatter(formatter)
     logger.addHandler(fh)
