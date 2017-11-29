@@ -45,8 +45,9 @@ Running the `multipage2book.py` with a `-h` or `--help` argument will get you a 
 usage: multipage2book.py [-h] [--password PASSWORD] [--overwrite]
                          [--language LANGUAGE] [--resolution RESOLUTION]
                          [--use-hocr] [--mods-dir MODS_DIR]
-                         [--output-dir OUTPUT_DIR] [--skip-derivatives]
-                         [-d {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
+                         [--output-dir OUTPUT_DIR] [--merge]
+                         [--skip-derivatives]
+                         [-l {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
                          files
 
 Turn a PDF/Tiff or set of PDFs/Tiffs into properly formatted directories for
@@ -66,12 +67,16 @@ optional arguments:
                         Resolution of the source material, used when
                         generating Tiff. Defaults to 300.
   --use-hocr            Generate OCR by stripping HTML characters from HOCR,
-                        otherwise run tesseract a second time. Defaults to use tesseract.
+                        otherwise run tesseract a second time. Defaults to use
+                        tesseract.
   --mods-dir MODS_DIR   Directory of files with a matching name but with the
-                        extension '.mods' to be added to the books.
+                        extension ".mods" to be added to the books.
   --output-dir OUTPUT_DIR
                         Directory to build books in, defaults to current
                         directory.
+  --merge               Files that have the same name but with a numeric
+                        suffix are considered the same book and directories
+                        are merged. (ie. MyBook1.pdf and MyBook2.pdf)
   --skip-derivatives    Only split the source file into the separate pages and
                         directories, don't generate derivatives.
   -l {DEBUG,INFO,WARNING,ERROR,CRITICAL}, --loglevel {DEBUG,INFO,WARNING,ERROR,CRITICAL}
