@@ -53,6 +53,7 @@ valid_extensions = re.compile(r'.*\.(pdf|tiff?)$', re.IGNORECASE)
 """Regex - Match PDF extension"""
 is_pdf = re.compile(r'.*\.pdf$', re.IGNORECASE)
 
+
 def preprocess_file(input_file):
     # Check for an existing directory
     book_name = os.path.splitext(os.path.split(input_file)[1])[0]
@@ -351,6 +352,7 @@ def get_pdf_page(pdf, page, out_dir):
         # Only run if the file doesn't exist.
         logger.debug("Generating PDF for page {}".format(str(page)))
         op = ['gs', '-q', '-dNOPAUSE', '-dBATCH', '-dSAFER', '-sDEVICE=pdfwrite', '-dCompatibilityLevel=1.3',
+              '-dAutoRotatePages=/None'
               '-sOutputFile={}'.format(output_file),
               '-dFirstPage={}'.format(str(page)), '-dLastPage={}'.format(str(page)), pdf]
         if not do_system_call(op):
@@ -428,7 +430,7 @@ def get_hocr(tiff_file, out_dir):
     if not os.path.exists(output_file):
         logger.debug("Generating HOCR.")
         op = ['tesseract', tiff_file, output_stub, '-l', options.language, 'hocr']
-        if not do_system_call(op):
+        if not do_system_call(op, timeout=600):
             quit()
         os.rename(tmp_file, output_file)
         if os.path.exists(output_stub + '.txt') and options.use_hocr:
@@ -509,17 +511,18 @@ def make_page_mods(filename, output_dir, page):
             logger.error("Error writing out page level MODS to directory {}: {}".format(output_dir, e))
 
 
-def do_system_call(ops, return_result=False):
+def do_system_call(ops, return_result=False, timeout=60):
     """Execute an external system call
 
     Keyword arguments
     ops -- a list of the executable and any arguments.
     return_result -- return the result of the call if successful.
+    timeout -- Time to wait for the process to complete.
     """
     try:
         process = subprocess.Popen(ops, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         try:
-            outs, errs = process.communicate(timeout=60)
+            outs, errs = process.communicate(timeout=timeout)
             if not process.returncode == 0:
                 logger.error("Error executing command: \n{}\nOutput: {}\nError: {}".format(' '.join(ops), outs, errs))
                 return False
