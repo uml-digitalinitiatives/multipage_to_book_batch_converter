@@ -6,7 +6,6 @@ Multipage 2 PDF to Islandora Book Batch converter
 Created by Jared Whiklo on 2016-03-16.
 Copyright (c) 2016 University of Manitoba Libraries. All rights reserved.
 """
-import sys
 import os
 import argparse
 import re
@@ -17,11 +16,9 @@ import time
 import PyPDF2
 import html
 import shutil
-import lxml.etree as ET
-import copy
 
-sys.path.append(os.path.dirname(__file__))
 from hocrpdf import HocrPdf
+from MODSSpreader import MODSSpreader
 
 """logger placeholder"""
 logger = None
@@ -94,6 +91,8 @@ def process_file(input_file):
             mods_file = os.path.join(book_dir, 'MODS.xml')
             logger.debug("copy file to {} and set that as mods_file".format(mods_file))
             shutil.copyfile(tmpfile, mods_file)
+            logger.debug("Setting up MODS spreader")
+            spread = MODSSpreader(logger=logger)
         else:
             logger.error("Missing MODS file for {}".format(input_file))
 
@@ -126,12 +125,24 @@ def process_file(input_file):
                 make_pdf(os.path.join(out_dir, 'JP2.jp2'), hocr_file, out_dir)
         if mods_file is not None:
             logger.debug("We have a mods_file.")
-            # Copy mods file and insert 
-            make_page_mods(filename=mods_file, output_dir=os.path.join(book_dir, out_dir), page=p)
-    if not options.skip_derivatives and is_pdf.match(input_file):
-        # For our directory scanner, leave this as a manual process for now.
-        # Last copy the original PDF to the book level as PDF.pdf
-        shutil.copy(input_file, os.path.join(book_dir, 'PDF.pdf'))
+            # Copy mods file and insert
+            spread.make_page_mods(filename=mods_file, output_dir=os.path.join(book_dir, out_dir), page=p)
+    if not options.skip_derivatives:
+        if is_pdf.match(input_file):
+            # For our directory scanner, leave this as a manual process for now.
+            # Last copy the original PDF to the book level as PDF.pdf
+            shutil.copy(input_file, os.path.join(book_dir, 'PDF.pdf'))
+        else:
+            # Try to make a combined PDF.
+            operations = [
+                "gs", "-dBATCH", "-dNOPAUSE", "-q", "-sDEVICE=pdfwrite", "-dAutoRotatePages=/None",
+                "-sOutputFile={}".format(os.path.join(book_dir, 'PDF.pdf')), "$(", "find", "." , "-type", "f", "-name",
+                "'PDF.pdf'", "-print", "|", "sort", "-t'/'", "-k", "2,2", "-n", ")"
+            ]
+            do_system_call(operations)
+        if os.path.exists(os.path.join(book_dir, '1', 'TN.jpg')):
+            # Copy the first page thumbnail up to the book.
+            shutil.copy(os.path.join(book_dir, '1', 'TN.jpg'), os.path.join(book_dir, 'TN.jpg'))
 
 
 def get_tiff(newPdf, outDir):
@@ -452,63 +463,6 @@ def make_pdf(jp2_file, hocr_file, out_dir):
     if not os.path.exists(output_file):
         logger.debug("Generating searchable PDF from tiff and hocr.")
         hocr.create_pdf(image_file=jp2_file, hocr_file=hocr_file, pdf_filename=output_file, dpi=options.resolution)
-
-
-def make_page_mods(filename, output_dir, page):
-    """Using a Book level MODS record insert the relatedItem/part information
-    
-    Keyword arguments
-    filename -- The filename of the top level MODS file
-    output_dir -- The page level directory to save the MODS to
-    page -- The page number"""
-    mods_namespace = '{http://www.loc.gov/mods/v3}'
-    logger.debug("In make_page_mods")
-    if os.path.exists(filename) and os.path.isfile(filename):
-        logger.debug("Have file {}".format(filename))
-        try:
-            tree = ET.parse(filename)
-        except:
-            logger.error("Error parsing MODS in file {}: {}".format(filename, sys.exc_info()[0]))
-            return
-        related = tree.find("{0}relatedItem[@type=\"host\"]".format(mods_namespace))
-        if related is None:
-            root = tree.getroot()
-            related = ET.SubElement(root, "{0}relatedItem".format(mods_namespace), {'type': 'host'})
-        if related.find("{0}titleInfo/{0}title".format(mods_namespace)) is None:
-            title = tree.find("{0}titleInfo/{0}title".format(mods_namespace))
-            if title is None:
-                logger.warning("Unable to locate the title page {}".format(page))
-            else:
-                tmp = ET.Element("{0}titleInfo".format(mods_namespace))
-                tmp.append(copy.deepcopy(title))
-                related.append(tmp)
-                logger.debug("Copied titleInfo to relatedItem, now add page number to top level titleInfo/title")
-                title.text = title.text + ' (Page {})'.format(page)
-        part = related.find("{0}path".format(mods_namespace))
-        if part is None:
-            part = ET.SubElement(related, '{0}part'.format(mods_namespace))
-        extent = part.find("{0}extent[@unit=\"pages\"]".format(mods_namespace))
-        if extent is None:
-            extent = ET.SubElement(part, "{0}extent".format(mods_namespace), {'unit': 'pages'})
-        start = extent.find("./{0}start".format(mods_namespace))
-        if start is not None:
-            start.getparent().remove(start)
-        start = ET.SubElement(extent, '{0}start'.format(mods_namespace))
-        start.text = str(page)
-        end = extent.find('./{0}end'.format(mods_namespace))
-        if end is not None:
-            end.getparent().remove(end)
-        end = ET.SubElement(extent, '{0}end'.format(mods_namespace))
-        end.text = str(page)
-        # Remove the book level page count
-        phys_desc = tree.find("{0}physicalDescription/{0}extent[@unit=\"pages\"]".format(mods_namespace))
-        if phys_desc is not None:
-            phys_desc.getparent().remove(phys_desc)
-
-        try:
-            tree.write(os.path.join(output_dir, 'MODS.xml'), encoding='utf-8', xml_declaration=True, method='xml')
-        except IOError as e:
-            logger.error("Error writing out page level MODS to directory {}: {}".format(output_dir, e))
 
 
 def do_system_call(ops, return_result=False, timeout=60):
