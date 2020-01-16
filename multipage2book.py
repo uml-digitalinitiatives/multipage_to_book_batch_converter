@@ -6,6 +6,7 @@ Multipage 2 PDF to Islandora Book Batch converter
 Created by Jared Whiklo on 2016-03-16.
 Copyright (c) 2016 University of Manitoba Libraries. All rights reserved.
 """
+import sys
 import os
 import argparse
 import re
@@ -55,9 +56,11 @@ def preprocess_file(input_file):
     # Check for an existing directory
     book_name = os.path.splitext(os.path.split(input_file)[1])[0]
     book_number = None
-    if (options.merge and re.search(r'\d+$', book_name) is not None):
+    if options.merge and re.search(r'\d+$', book_name) is not None:
         (book_name, book_number, junk) = re.split(r'(\d+)$', book_name)
+        book_name = book_name.strip()
     book_name = re.sub(r'\s+', '_', book_name.rstrip())
+    book_dir = None
     if options.output_dir != '.':
         if options.output_dir[0:1] == '/' and os.path.exists(options.output_dir):
             book_dir = os.path.join(options.output_dir, book_name + '_dir')
@@ -118,10 +121,14 @@ def process_file(input_file):
         else:
             tiff_file = get_tiff_page(input_file, p, out_dir)
         if not options.skip_derivatives:
-            hocr_file = get_hocr(tiff_file, out_dir)
-            get_ocr(tiff_file, hocr_file, out_dir)
+            if not options.skip_hocr_ocr:
+                # Skip HOCR/OCR generation.
+                hocr_file = get_hocr(tiff_file, out_dir)
+                get_ocr(tiff_file, hocr_file, out_dir)
             get_jpegs(tiff_file, out_dir)
-            if not is_pdf.match(input_file) and os.path.exists(os.path.join(out_dir, 'JP2.jp2')):
+            if not is_pdf.match(input_file) and os.path.exists(os.path.join(out_dir, 'JP2.jp2')) and os.path.exists(
+                    os.path.join(out_dir, 'HOCR.html')):
+                # If we didn't start with a PDF, and we have a JP2 and HOCR file, we can create a PDF.
                 make_pdf(os.path.join(out_dir, 'JP2.jp2'), hocr_file, out_dir)
         if mods_file is not None:
             logger.debug("We have a mods_file.")
@@ -187,7 +194,7 @@ def get_tiff_page(tiff_file, page_num, out_dir):
         logger.debug("{} exists and we are deleting it.".format(output_file))
     if not os.path.exists(output_file):
         logger.debug("Getting Tiff from multi-page Tiff")
-        op = ['convert', tiff_file + "[" + str(adjusted_page) + "]", output_file]
+        op = ['convert', '{0}[{1}]'.format(tiff_file, str(adjusted_page)), output_file]
         if not do_system_call(op):
             quit()
     return output_file
@@ -227,7 +234,7 @@ def make_jpeg_2000(tiff_file, out_dir):
             do_system_call(op)
         else:
             new_file = tiff_file
-        if get_bit_depth(tiff_file) > 8:
+        if get_bit_depth(tiff_file) >= 8:
             # Use Kakadu
             op = ['kdu_compress', '-i', new_file, '-o', output_file]
             if loseless:
@@ -465,7 +472,7 @@ def make_pdf(jp2_file, hocr_file, out_dir):
         hocr.create_pdf(image_file=jp2_file, hocr_file=hocr_file, pdf_filename=output_file, dpi=options.resolution)
 
 
-def do_system_call(ops, return_result=False, timeout=60):
+def do_system_call(ops, return_result=False, timeout=60, fail_on_error=True):
     """Execute an external system call
 
     Keyword arguments
@@ -474,17 +481,21 @@ def do_system_call(ops, return_result=False, timeout=60):
     timeout -- Time to wait for the process to complete.
     """
     try:
-        process = subprocess.Popen(ops, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-        try:
-            outs, errs = process.communicate(timeout=timeout)
-            if not process.returncode == 0:
-                logger.error("Error executing command: \n{}\nOutput: {}\nError: {}".format(' '.join(ops), outs, errs))
-                return False
-        except TimeoutError as e:
-            logger.error(
-                "Error executing command: \n{}\nMessage: {}\nOutput: {}\nSTDOUT: ".format(e.cmd, e.stderr, e.output,
-                                                                                          e.stdout))
+        if sys.version_info.major == 3 and sys.version_info.minor < 7:
+            process = subprocess.run(ops, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout,
+                                     universal_newlines=True)
+        else:
+            process = subprocess.run(ops, capture_output=True, timeout=timeout, universal_newlines=True)
+        outs = process.stdout
+        errs = process.stderr
+        if not process.returncode == 0 and fail_on_error:
+            logger.error("Error executing command: \n{}\nOutput: {}\nError: {}".format(' '.join(ops), outs, errs))
             return False
+    except TimeoutError as e:
+        logger.error(
+            "Error executing command: \n{}\nMessage: {}\nOutput: {}\nSTDOUT: ".format(e.cmd, e.stderr, e.output,
+                                                                                          e.stdout))
+        return False
     except subprocess.CalledProcessError as e:
         logger.error(
             "Error executing command: \n{}\nMessage: {}\nOutput: {}\nSTDOUT: ".format(e.cmd, e.stderr, e.output,
@@ -513,9 +524,9 @@ def count_pages(input_file):
             pdf_read = None
     else:
         ops = [
-            'identify', '-ping', '-format', "%n\\n", input_file
+            'identify', '-strip', '-ping', '-format', "%n\\n", input_file
         ]
-        results = do_system_call(ops, return_result=True)
+        results = do_system_call(ops, return_result=True, fail_on_error=False)
         count = int(results.rstrip().split('\n').pop())
 
     return count
@@ -636,6 +647,8 @@ def main():
     parser.add_argument('--skip-derivatives', dest="skip_derivatives", action='store_true', default=False,
                         help='Only split the source file into the separate pages and directories, don\'t generate '
                              'derivatives.')
+    parser.add_argument('--skip-hocr-ocr', dest="skip_hocr_ocr", action='store_true', default=False,
+                        help='Do not generate OCR/HOCR datastreams, this cannot be used with --skip-derivatives')
     parser.add_argument('-l', '--loglevel', dest="debug_level", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         default='ERROR', help='Set logging level, defaults to ERROR.')
     args = parser.parse_args()

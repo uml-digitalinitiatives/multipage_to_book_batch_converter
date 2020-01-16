@@ -7,6 +7,7 @@ import os
 import logging
 import copy
 import re
+import shutil
 
 
 directory_regexp = re.compile('^\d+$')
@@ -116,3 +117,5 @@ if __name__ == "__main__":
         pages.sort(key=lambda x: x.name, reverse=False)
         for page in pages:
             spreader.make_page_mods(args.source_mods, page.path, int(page.name))
+        # Copy the source to the top-level as the MODS.xml
+        shutil.copy(args.source_mods, os.path.join(args.page_directory, 'MODS.xml'))
