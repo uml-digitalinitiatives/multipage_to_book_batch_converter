@@ -59,7 +59,7 @@ def preprocess_file(input_file):
     if options.merge and re.search(r'\d+$', book_name) is not None:
         (book_name, book_number, junk) = re.split(r'(\d+)$', book_name)
         book_name = book_name.strip()
-    book_name = re.sub(r'\s+', '_', book_name.rstrip())
+    book_name = re.sub(r'[\s\',\-]+', '_', book_name.rstrip())
     book_dir = None
     if options.output_dir != '.':
         if options.output_dir[0:1] == '/' and os.path.exists(options.output_dir):
@@ -139,7 +139,7 @@ def process_file(input_file):
             # For our directory scanner, leave this as a manual process for now.
             # Last copy the original PDF to the book level as PDF.pdf
             shutil.copy(input_file, os.path.join(book_dir, 'PDF.pdf'))
-        else:
+        elif has_page_pdfs(book_dir):
             # Try to make a combined PDF.
             operations = [
                 "gs", "-dBATCH", "-dNOPAUSE", "-q", "-sDEVICE=pdfwrite", "-dAutoRotatePages=/None",
@@ -152,18 +152,18 @@ def process_file(input_file):
             shutil.copy(os.path.join(book_dir, '1', 'TN.jpg'), os.path.join(book_dir, 'TN.jpg'))
 
 
-def get_tiff(newPdf, outDir):
+def get_tiff(new_pdf, out_dir):
     """Produce a single page Tiff from a single page PDF
 
     Keyword arguments
-    newPdf -- The full path to the PDF file
-    outDir -- The directory to save the single page Tiff to
+    new_pdf -- The full path to the PDF file
+    out_dir -- The directory to save the single page Tiff to
     """
     logger.debug("in get_tiff")
     resolution = options.resolution
     # Increase density by 25%, then resize to only 75%
     altered_resolution = int(resolution * 1.25)
-    output_file = os.path.join(outDir, 'OBJ.tiff')
+    output_file = os.path.join(out_dir, 'OBJ.tiff')
     if os.path.exists(output_file) and os.path.isfile(output_file) and options.overwrite:
         # Delete the file if it exists AND we set --overwrite
         os.remove(output_file)
@@ -172,7 +172,7 @@ def get_tiff(newPdf, outDir):
     if not os.path.exists(output_file):
         # Only run if the file doesn't exist.
         logger.debug("Generating Tiff")
-        op = ['convert', '-density', str(altered_resolution), newPdf, '-resize', '75%', '-colorspace', 'rgb', '-alpha',
+        op = ['convert', '-density', str(altered_resolution), new_pdf, '-resize', '75%', '-colorspace', 'rgb', '-alpha',
               'Off', output_file]
         if not do_system_call(op):
             quit()
@@ -212,11 +212,11 @@ def get_jpegs(tiff_file, out_dir):
     make_jpeg(tiff_file, out_dir, 'TN', height=110, width=110)
 
 
-def make_jpeg_2000(tiff_file, out_dir):
+def make_jpeg_2000(tiff_file, out_dir, second_try=False):
     size = get_image_size(tiff_file)
     res = get_image_resolution(tiff_file)
-    # loseless = (size['height'] < 1024 or size['width'] < 1024 or res['x'] < 300 or res['y'] < 300)
-    loseless = True
+    loseless = (size['height'] < 1024 or size['width'] < 1024 or res['x'] < 300 or res['y'] < 300)
+    #loseless = True
     just_file = os.path.split(tiff_file)[1]
     output_file = os.path.join(out_dir, 'JP2.jp2')
 
@@ -226,35 +226,33 @@ def make_jpeg_2000(tiff_file, out_dir):
 
     if not os.path.exists(output_file):
         logger.debug("Generating Jpeg2000")
-
-        if is_compressed(tiff_file):
-            new_file = os.path.join(os.path.dirname(tiff_file),
-                                   os.path.splitext(just_file)[0] + "_tmp" + os.path.splitext(just_file)[1])
-            op = ['convert', '-compress', 'None', tiff_file, new_file]
-            do_system_call(op)
+        # Use Kakadu
+        op = ['kdu_compress', '-i', tiff_file, '-o', output_file]
+        if loseless:
+            # Do loseless
+            op.extend(['-quiet', 'Creversible=yes', '-rate', '-,1,0.5,0.25', 'Clevels=5'])
         else:
-            new_file = tiff_file
-        if get_bit_depth(tiff_file) >= 8:
-            # Use Kakadu
-            op = ['kdu_compress', '-i', new_file, '-o', output_file]
-            if loseless:
-                # Do loseless
-                op.extend(['Creversible=yes', '-rate', '-,1,0.5,0.25', 'Clevels=5'])
+            op.extend(['-quiet', 'Clayers=5', 'Clevels=7',
+                       'Cprecincts={256,256},{256,256},{256,256},{128,128},{128,128},{64,64},{64,64},{32,32},{16,16}',
+                       'Corder=RPCL', 'ORGgen_plt=yes', 'ORGtparts=R', 'Cblk={32,32}', 'Cuse_sop=yes'])
+        if not do_system_call(op):
+            if is_compressed(tiff_file) and not second_try:
+                # We failed, the tiff is compressed and we haven't tried with an uncompressed tiff
+                temp_tiff = os.path.join(os.path.dirname(tiff_file),
+                                         os.path.splitext(just_file)[0] + "_tmp" + os.path.splitext(just_file)[1])
+                op = ['convert', '-compress', 'None', tiff_file, temp_tiff]
+                do_system_call(op, timeout=600)
+                make_jpeg_2000(temp_tiff, out_dir, second_try=True)
             else:
-                op.extend(['-rate', '0.5', 'Clayers=1', 'Clevels=7',
-                           'Cprecincts={256,256},{256,256},{256,256},{128,128},{128,128},{64,64},{64,64},{32,32},{16,16}',
-                           'Corder=RPCL', 'ORGgen_plt=yes', 'ORGtparts=R', 'Cblk={32,32}', 'Cuse_sop=yes'])
-        else:
-            # Use ImageMagick
-            op = ['convert']
-            op.extend(image_magick_opts(loseless))
-            op.extend([new_file, output_file])
+                # We failed
+                logger.error("Failed to generate JPEG2000 from %s" % tiff_file)
+                print("Failed to generate JPEG2000 from %s" % tiff_file)
+                os.remove(tiff_file)
+                quit(1)
 
-        do_system_call(op)
-
-        if new_file != tiff_file:
+        if second_try:
             # If we made an uncompressed copy, delete it.
-            os.remove(new_file)
+            os.remove(tiff_file)
 
 
 def make_jpeg(tiff_file, out_dir, out_name, height=None, width=None):
@@ -332,6 +330,10 @@ def get_image_size(image_file):
     logger.debug("Getting the height and width of {}".format(image_file))
     op = ['identify', '-format', '%[height]-%[width]', image_file]
     result = do_system_call(ops=op, return_result=True)
+    if not result:
+        logger.error("Problem getting image size for %s: %s" % (image_file, result))
+        print("Problem getting image size for %s: %s" % (image_file, result))
+        quit(1)
     res_list = result.rstrip('\r\n').split('-')
     return {'height': int(res_list[0]), 'width': int(res_list[1])}
 
@@ -348,6 +350,16 @@ def get_image_resolution(image_file):
     res_list = [int(re.search(r'\d+', value).group(0)) for value in res_list]
     logger.debug("Image resolution is " + str(res_list))
     return {'x': res_list[0], 'y': res_list[1]}
+
+
+def has_page_pdfs(out_dir):
+    logger.debug("Checking for PDFs in the page directories of %s" % out_dir)
+    for path, dirs, files in os.walk(out_dir):
+        if dirs == out_dir:
+            continue
+        if 'PDF.pdf' in files:
+            return True
+    return False
 
 
 def get_pdf_page(pdf, page, out_dir):
@@ -370,7 +382,7 @@ def get_pdf_page(pdf, page, out_dir):
         # Only run if the file doesn't exist.
         logger.debug("Generating PDF for page {}".format(str(page)))
         op = ['gs', '-q', '-dNOPAUSE', '-dBATCH', '-dSAFER', '-sDEVICE=pdfwrite', '-dCompatibilityLevel=1.3',
-              '-dAutoRotatePages=/None'
+              '-dAutoRotatePages=/None',
               '-sOutputFile={}'.format(output_file),
               '-dFirstPage={}'.format(str(page)), '-dLastPage={}'.format(str(page)), pdf]
         if not do_system_call(op):
@@ -480,6 +492,7 @@ def do_system_call(ops, return_result=False, timeout=60, fail_on_error=True):
     return_result -- return the result of the call if successful.
     timeout -- Time to wait for the process to complete.
     """
+    logger.debug("Running system call - %s" % " ".join(ops))
     try:
         if sys.version_info.major == 3 and sys.version_info.minor < 7:
             process = subprocess.run(ops, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout,
