@@ -125,7 +125,7 @@ def process_file(input_file):
         else:
             tiff_file = get_tiff_page(input_file, p, out_dir)
         if not options.skip_derivatives:
-            derivative_gen.do_page_derivatives(input_file, tiff_file, out_dir)
+            derivative_gen.do_page_derivatives(tiff_file, out_dir, input_file=input_file)
 
         if mods_file is not None:
             logger.debug("We have a mods_file.")

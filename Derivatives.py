@@ -15,7 +15,6 @@ from hocrpdf import HocrPdf
 
 
 class Derivatives(object):
-
     """Regex - Match HTML tags"""
     htmlmatch = re.compile(r'<[^>]+>', re.MULTILINE | re.DOTALL)
     """Regex - Match blank lines/characters"""
@@ -27,14 +26,15 @@ class Derivatives(object):
         self.logger = logger
         self.options = options
 
-    def do_page_derivatives(self, input_file, tiff_file, out_dir):
+    def do_page_derivatives(self, tiff_file, out_dir, input_file=None):
         if not self.options.skip_hocr_ocr:
             self.do_hocr_ocr(tiff_file, out_dir)
         self.get_jpegs(tiff_file, out_dir)
-        self.make_pdf(input_file, os.path.join(out_dir, 'JP2.jp2'), os.path.join(out_dir, 'HOCR.html'), out_dir)
+        if input_file is not None and not Derivatives.is_pdf.match(input_file):
+            self.make_pdf(os.path.join(out_dir, 'JP2.jp2'), os.path.join(out_dir, 'HOCR.html'), out_dir)
 
     def do_book_derivatives(self, input_file, out_dir):
-        if Derivatives.is_pdf.match(input_file):
+        if input_file is not None and Derivatives.is_pdf.match(input_file):
             # For our directory scanner, leave this as a manual process for now.
             # Last copy the original PDF to the book level as PDF.pdf
             shutil.copy(input_file, os.path.join(out_dir, 'PDF.pdf'))
@@ -42,7 +42,7 @@ class Derivatives(object):
             # Try to make a combined PDF.
             operations = [
                 "gs", "-dBATCH", "-dNOPAUSE", "-q", "-sDEVICE=pdfwrite", "-dAutoRotatePages=/None",
-                "-sOutputFile={}".format(os.path.join(out_dir, 'PDF.pdf')), "$(", "find", "." , "-type", "f", "-name",
+                "-sOutputFile={}".format(os.path.join(out_dir, 'PDF.pdf')), "$(", "find", ".", "-type", "f", "-name",
                 "'PDF.pdf'", "-print", "|", "sort", "-t'/'", "-k", "2,2", "-n", ")"
             ]
             Derivatives.do_system_call(operations, logger=self.logger)
@@ -212,9 +212,8 @@ class Derivatives(object):
                 os.rename(output_stub + '.txt', os.path.join(out_dir, 'OCR.txt'))
         return output_file
 
-    def make_pdf(self, input_file, jp2_file, hocr_file, out_dir):
-        if not Derivatives.is_pdf.match(input_file) and os.path.exists(os.path.join(out_dir, 'JP2.jp2')) and \
-            os.path.exists(os.path.join(out_dir, 'HOCR.html')):
+    def make_pdf(self, jp2_file, hocr_file, out_dir):
+        if os.path.exists(jp2_file) and os.path.exists(hocr_file):
             """Make PDF out of JP2 and HOCR."""
             hocr = HocrPdf()
             if self.options.debug_level == 'DEBUG':
@@ -325,19 +324,20 @@ class Derivatives(object):
             errs = process.stderr
             if not process.returncode == 0 and fail_on_error:
                 if logger is not None:
-                    logger.error("Error executing command: \n{}\nOutput: {}\nError: {}".format(' '.join(ops), outs, errs))
+                    logger.error(
+                        "Error executing command: \n{}\nOutput: {}\nError: {}".format(' '.join(ops), outs, errs))
                 return False
         except TimeoutError as e:
             if logger is not None:
                 logger.error(
-                "Error executing command: \n{}\nMessage: {}\nOutput: {}\nSTDOUT: ".format(e.cmd, e.stderr, e.output,
-                                                                                          e.stdout))
+                    "Error executing command: \n{}\nMessage: {}\nOutput: {}\nSTDOUT: ".format(e.cmd, e.stderr, e.output,
+                                                                                              e.stdout))
             return False
         except subprocess.CalledProcessError as e:
             if logger is not None:
                 logger.error(
-                "Error executing command: \n{}\nMessage: {}\nOutput: {}\nSTDOUT: ".format(e.cmd, e.stderr, e.output,
-                                                                                          e.stdout))
+                    "Error executing command: \n{}\nMessage: {}\nOutput: {}\nSTDOUT: ".format(e.cmd, e.stderr, e.output,
+                                                                                              e.stdout))
             return False
         if logger is not None:
             logger.debug("Command result:\n{}".format(outs))
@@ -384,9 +384,28 @@ if __name__ == '__main__':
     if args.process_dir[0] != '/' and args.process_dir[0] != '~':
         args.process_dir = os.path.join(os.getcwd(), args.process_dir)
     args.process_dir = os.path.realpath(args.process_dir)
-    if not os.path.exists(args.process_dir) or not os.access(args.process_dir, os.R_OK|os.W_OK) or not \
+    if not os.path.exists(args.process_dir) or not os.access(args.process_dir, os.R_OK | os.W_OK) or not \
             os.path.isdir(args.process_dir):
         parser.error("%s does not exist is or not a read/writeable directory" % args.process_dir)
     else:
         internal_logger = setup_log(args.debug_level)
         d = Derivatives(args, internal_logger)
+        if args.single_page:
+            tiffs = [x for x in os.listdir(args.process_dir) if os.path.splitext(x) == 'tif' or os.path.splitext(x) ==
+                     'tiff']
+            if len(tiffs) == 1:
+                d.do_page_derivatives(tiffs[0], args.process_dir)
+            else:
+                print("Error no tiff files found in %s" % args.process_dir)
+                quit(1)
+        else:
+            dirs = [x for x in os.listdir(args.process_dir) if os.path.isdir(x)]
+            for dir in dirs:
+                tiffs = [x for x in os.listdir(dir) if
+                         os.path.splitext(x) == 'tif' or os.path.splitext(x) ==
+                         'tiff']
+                if len(tiffs) == 1:
+                    d.do_page_derivatives(tiffs[0], dir)
+                else:
+                    print("Error no tiff files found in %s" % dir)
+            d.do_book_derivatives(None, args.process_dir)
