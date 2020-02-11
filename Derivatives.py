@@ -371,9 +371,6 @@ if __name__ == '__main__':
     parser.add_argument('--use-hocr', dest="use_hocr", action='store_true', default=False,
                         help='Generate OCR by stripping HTML characters from HOCR, otherwise run tesseract a second '
                              'time. Defaults to use tesseract.')
-    parser.add_argument('--skip-derivatives', dest="skip_derivatives", action='store_true', default=False,
-                        help='Only split the source file into the separate pages and directories, don\'t generate '
-                             'derivatives.')
     parser.add_argument('--skip-hocr-ocr', dest="skip_hocr_ocr", action='store_true', default=False,
                         help='Do not generate OCR/HOCR datastreams, this cannot be used with --skip-derivatives')
     parser.add_argument('-l', '--loglevel', dest="debug_level",
@@ -399,13 +396,14 @@ if __name__ == '__main__':
                 print("Error no tiff files found in %s" % args.process_dir)
                 quit(1)
         else:
-            dirs = [x for x in os.listdir(args.process_dir) if os.path.isdir(x)]
+            dirs = [os.path.join(args.process_dir, x) for x in os.listdir(args.process_dir) if
+                    os.path.isdir(os.path.join(args.process_dir, x))]
             for dir in dirs:
-                tiffs = [x for x in os.listdir(dir) if
-                         os.path.splitext(x) == 'tif' or os.path.splitext(x) ==
-                         'tiff']
+                tiffs = [os.path.join(dir, x) for x in os.listdir(dir) if
+                         os.path.splitext(x)[1] == '.tif' or os.path.splitext(x)[1] ==
+                         '.tiff']
                 if len(tiffs) == 1:
                     d.do_page_derivatives(tiffs[0], dir)
                 else:
-                    print("Error no tiff files found in %s" % dir)
+                    print("Error no (or more than one) tiff files found in %s" % dir)
             d.do_book_derivatives(None, args.process_dir)
