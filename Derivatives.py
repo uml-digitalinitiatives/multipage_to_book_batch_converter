@@ -88,7 +88,7 @@ class Derivatives(object):
                 op.extend(['-quiet', 'Clayers=5', 'Clevels=7',
                            'Cprecincts={256,256},{256,256},{256,256},{128,128},{128,128},{64,64},{64,64},{32,32},{16,16}',
                            'Corder=RPCL', 'ORGgen_plt=yes', 'ORGtparts=R', 'Cblk={32,32}', 'Cuse_sop=yes'])
-            if not self.do_system_call(op):
+            if not self.do_system_call(op, logger=self.logger):
                 if self.is_compressed(tiff_file) and not second_try:
                     # We failed, the tiff is compressed and we haven't tried with an uncompressed tiff
                     temp_tiff = os.path.join(os.path.dirname(tiff_file),
