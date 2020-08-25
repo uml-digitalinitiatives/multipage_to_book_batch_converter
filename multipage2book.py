@@ -63,25 +63,25 @@ is_pdf = re.compile(r'.*\.pdf$', re.IGNORECASE)
 
 def preprocess_file(input_file):
     # Check for an existing directory
-    book_name = os.path.splitext(os.path.split(input_file)[1])[0]
+    original_book_name = os.path.splitext(os.path.split(input_file)[1])[0]
     book_number = None
-    if options.merge and re.search(r'\d+$', book_name) is not None:
-        (book_name, book_number, junk) = re.split(r'(\d+)$', book_name)
-        book_name = book_name.strip()
-    book_name = re.sub(r'[\s\',\-]+', '_', book_name.rstrip())
+    if options.merge and re.search(r'\d+$', original_book_name) is not None:
+        (original_book_name, book_number, junk) = re.split(r'(\d+)$', original_book_name)
+        original_book_name = original_book_name.strip()
+    sanitized_book_name = re.sub(r'[\s\',\-]+', '_', original_book_name.rstrip())
     book_dir = None
     if options.output_dir != '.':
         if options.output_dir[0:1] == '/' and os.path.exists(options.output_dir):
-            book_dir = os.path.join(options.output_dir, book_name + '_dir')
+            book_dir = os.path.join(options.output_dir, sanitized_book_name + '_dir')
         elif options.output_dir[0:1] != '/' and os.path.exists(os.path.join(os.getcwd(), options.output_dir)):
-            book_dir = os.path.join(os.getcwd(), options.output_dir, book_name + '_dir')
+            book_dir = os.path.join(os.getcwd(), options.output_dir, sanitized_book_name + '_dir')
     try:
         if book_dir is not None:
             logger.debug("Output directory was set to {}".format(book_dir))
     except UnboundLocalError:
         # not set, so use old default
-        book_dir = os.path.join(os.path.dirname(input_file), book_name + '_dir')
-    return book_dir, book_name, book_number
+        book_dir = os.path.join(os.path.dirname(input_file), sanitized_book_name + '_dir')
+    return book_dir, sanitized_book_name, book_number, original_book_name
 
 
 def process_file(input_file):
@@ -91,20 +91,26 @@ def process_file(input_file):
     pdf -- The full path to the input file
     """
     logger.info("Processing {}".format(input_file))
-    (book_dir, book_name, book_number) = preprocess_file(input_file)
+    (book_dir, book_name, book_number, unparsed_book_name) = preprocess_file(input_file)
     mods_file = None
     if not os.path.exists(book_dir):
         os.mkdir(book_dir)
     if options.mods_dir is not None:
-        tmpfile = os.path.join(options.mods_dir, book_name + '.mods')
-        logger.debug("We have a MODS directory to use {}, look for file {}".format(options.mods_dir, tmpfile))
-        if os.path.exists(tmpfile) and os.path.isfile(tmpfile):
-            logger.debug("Found file {} and it is a file.".format(tmpfile))
-            mods_file = os.path.join(book_dir, 'MODS.xml')
-            logger.debug("copy file to {} and set that as mods_file".format(mods_file))
-            shutil.copyfile(tmpfile, mods_file)
-            logger.debug("Setting up MODS spreader")
-        else:
+        tmpfiles = [
+            os.path.join(options.mods_dir, book_name + "." + options.mods_extension),
+            os.path.join(options.mods_dir, unparsed_book_name + "." + options.mods_extension)
+        ]
+        logger.debug("We have a MODS directory to use {}".format(options.mods_dir))
+        for tmpfile in tmpfiles:
+            logger.debug("Look for file {}".format(tmpfile))
+            if os.path.exists(tmpfile) and os.path.isfile(tmpfile):
+                logger.debug("Found file {} and it is a file.".format(tmpfile))
+                mods_file = os.path.join(book_dir, 'MODS.xml')
+                logger.debug("copy file to {} and set that as mods_file".format(mods_file))
+                shutil.copyfile(tmpfile, mods_file)
+                logger.debug("Setting up MODS spreader")
+                break
+        if mods_file is None:
             logger.error("Missing MODS file for {}".format(input_file))
 
     pages = count_pages(input_file)
@@ -346,8 +352,11 @@ def main():
                         help='Generate OCR by stripping HTML characters from HOCR, otherwise run tesseract a second '
                              'time. Defaults to use tesseract.')
     parser.add_argument('--mods-dir', dest="mods_dir", default=None,
-                        help='Directory of files with a matching name but with the extension ".mods" to be added to '
+                        help='Directory of files with a matching name but with the extension "mods" to be added to '
                              'the books.')
+    parser.add_argument('--mods-extension', dest="mods_extension", default="mods",
+                        help="The extension of the MODS files existing in the above directory. Files are matched based "
+                             "on filename but with this extension. Defaults to 'mods'")
     parser.add_argument('--output-dir', dest="output_dir", default=".",
                         help="Directory to build books in, defaults to current directory.")
     parser.add_argument('--merge', dest="merge", action='store_true', default=False,
@@ -386,6 +395,10 @@ def main():
 
     if not os.path.exists(args.output_dir):
         os.mkdir(args.output_dir)
+
+    if args.mods_extension is not None:
+        """Strip leading periods from the extension"""
+        args.mods_extension = args.mods_extension.lstrip(".")
 
     if os.path.isfile(args.files) and valid_extensions.match(args.files):
         set_up(args)

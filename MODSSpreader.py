@@ -10,16 +10,16 @@ import re
 import shutil
 
 
-directory_regexp = re.compile('^\d+$')
+directory_regexp = re.compile(r'^\d+$')
 
 
 class MODSSpreader:
 
     logger = None
 
-    page_title_regexp = re.compile('\sPage\s*\(?\s*\d+\s*\)?\s*$')
+    page_title_regexp = re.compile(r'\sPage\s*\(?\s*\d+\s*\)?\s*$')
 
-    def __init__(self, logger = None):
+    def __init__(self, logger=None):
         if logger is None:
             self.setup_console_logger()
         else:
