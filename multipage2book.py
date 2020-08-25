@@ -353,7 +353,7 @@ def main():
                              'time. Defaults to use tesseract.')
     parser.add_argument('--mods-dir', dest="mods_dir", default=None,
                         help='Directory of files with a matching name but with the extension "mods" to be added to '
-                             'the books.')
+                             'the books. By default it checks the "files" argument if it is a directory.')
     parser.add_argument('--mods-extension', dest="mods_extension", default="mods",
                         help="The extension of the MODS files existing in the above directory. Files are matched based "
                              "on filename but with this extension. Defaults to 'mods'")
@@ -377,6 +377,10 @@ def main():
         # Relative filepath
         args.files = os.path.join(os.getcwd(), args.files)
 
+    # If we provide an input directory and no MODS directory, use the input directory.
+    if args.mods_dir is None and os.path.isdir(args.files):
+        args.mods_dir = args.files
+
     if args.mods_dir is not None:
         if not args.mods_dir[0] == '/':
             # Relative directory
@@ -384,6 +388,7 @@ def main():
         if not (os.path.exists(args.mods_dir) or os.path.isdir(args.mods_dir)):
             parser.error("--mods-dir was not found or is not a directory.")
             quit()
+
     if args.merge and args.overwrite:
         parser.error("--merge and --overwrite are mutually exclusive options, you can only use one at a time.")
 
@@ -393,11 +398,12 @@ def main():
               "expected directory contains files, it will halt with a warning.")
         input("Press any key to proceed")
 
+    # If the output directory does not exist, try to create it.
     if not os.path.exists(args.output_dir):
         os.mkdir(args.output_dir)
 
     if args.mods_extension is not None:
-        """Strip leading periods from the extension"""
+        # Strip leading periods from the extension
         args.mods_extension = args.mods_extension.lstrip(".")
 
     if os.path.isfile(args.files) and valid_extensions.match(args.files):
