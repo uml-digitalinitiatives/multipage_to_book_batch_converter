@@ -373,7 +373,9 @@ if __name__ == '__main__':
                         help='Generate OCR by stripping HTML characters from HOCR, otherwise run tesseract a second '
                              'time. Defaults to use tesseract.')
     parser.add_argument('--skip-hocr-ocr', dest="skip_hocr_ocr", action='store_true', default=False,
-                        help='Do not generate OCR/HOCR datastreams, this cannot be used with --skip-derivatives')
+                        help='Do not generate OCR/HOCR datastreams')
+    parser.add_argument('--skip-jp2', dest="skip_jp2", action='store_true', default=False,
+                        help='Do not generate JP2 datastreams')
     parser.add_argument('-l', '--loglevel', dest="debug_level",
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         default='ERROR', help='Set logging level, defaults to ERROR.')
