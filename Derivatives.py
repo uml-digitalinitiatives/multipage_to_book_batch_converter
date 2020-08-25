@@ -62,7 +62,8 @@ class Derivatives(object):
         tiff_file -- The tiff file
         out_dir -- The directory to save the images to.
         """
-        self._make_jpeg_2000(tiff_file, out_dir)
+        if not self.options.skip_jp2:
+            self._make_jpeg_2000(tiff_file, out_dir)
         self._make_jpeg(tiff_file, out_dir, 'JPG', height=800, width=800)
         self._make_jpeg(tiff_file, out_dir, 'TN', height=110, width=110)
 

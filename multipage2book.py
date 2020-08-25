@@ -37,8 +37,12 @@ required_programs = [
 ]
 
 """External programs needed for creating derivatives."""
-derivative_programs = [
+hocr_programs = [
     {'exec': 'tesseract', 'check_var': '-v'},
+]
+
+"""External programs for Jpeg2000 derivatives."""
+jp2_programs = [
     {'exec': 'kdu_compress', 'check_var': '-version'}
 ]
 
@@ -285,20 +289,22 @@ def set_up(args):
     """
     global options, derivative_gen, spreader
     options = args
+    setup_log()
     derivative_gen = Derivatives(options, logger)
     spreader = MODSSpreader(logger=logger)
-    setup_log()
     test_programs = required_programs
-    if not options.skip_derivatives:
-        test_programs.extend(derivative_programs)
+    if not options.skip_derivatives and not options.skip_hocr_ocr:
+        test_programs.extend(hocr_programs)
+    if not options.skip_derivatives and not options.skip_jp2:
+        test_programs.extend(jp2_programs)
 
-        try:
-            for prog in test_programs:
-                subprocess.run([prog.get('exec'), prog.get('check_var')], stdout=subprocess.DEVNULL,
-                               stderr=subprocess.DEVNULL, check=True)
-        except FileNotFoundError as e:
-            print("A required program could not be found: {}".format(e.strerror.split(':')[1]))
-            quit()
+    try:
+        for prog in test_programs:
+            subprocess.run([prog.get('exec'), prog.get('check_var')], stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL, check=True)
+    except FileNotFoundError as e:
+        print("A required program could not be found: {}".format(e.strerror.split(':')[1]))
+        quit()
 
 
 def setup_log():
@@ -352,6 +358,8 @@ def main():
                              'derivatives.')
     parser.add_argument('--skip-hocr-ocr', dest="skip_hocr_ocr", action='store_true', default=False,
                         help='Do not generate OCR/HOCR datastreams, this cannot be used with --skip-derivatives')
+    parser.add_argument('--skip-jp2', dest="skip_jp2", action='store_true', default=False,
+                        help='Do not generate JP2 datastreams, this cannot be used with --skip-derivatives')
     parser.add_argument('-l', '--loglevel', dest="debug_level", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         default='ERROR', help='Set logging level, defaults to ERROR.')
     args = parser.parse_args()
@@ -375,6 +383,9 @@ def main():
               "before the extension. Files are sorted by the number and require an empty starting directory. If the "
               "expected directory contains files, it will halt with a warning.")
         input("Press any key to proceed")
+
+    if not os.path.exists(args.output_dir):
+        os.mkdir(args.output_dir)
 
     if os.path.isfile(args.files) and valid_extensions.match(args.files):
         set_up(args)
