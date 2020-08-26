@@ -50,7 +50,7 @@ jp2_programs = [
 options = None
 
 """Regex - Count pages from parsed PDF."""
-rxcountpages = re.compile(b"/Type\s*/Page([^s]|$)", re.MULTILINE | re.DOTALL)
+rxcountpages = re.compile(rb"/Type\s*/Page([^s]|$)", re.MULTILINE | re.DOTALL)
 """Regex - Match HTML tags"""
 htmlmatch = re.compile(r'<[^>]+>', re.MULTILINE | re.DOTALL)
 """Regex - Match blank lines/characters"""
@@ -143,6 +143,9 @@ def process_file(input_file):
             spreader.make_page_mods(filename=mods_file, output_dir=os.path.join(book_dir, out_dir), page=p)
     if not options.skip_derivatives:
         derivative_gen.do_book_derivatives(input_file, book_dir)
+    if is_pdf.match(input_file):
+        # Copy the original PDF to the top-level book directory.
+        shutil.copyfile(input_file, os.path.join(book_dir, 'PDF.pdf'))
 
 
 def get_tiff(new_pdf, out_dir):
