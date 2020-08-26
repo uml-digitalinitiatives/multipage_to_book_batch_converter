@@ -111,7 +111,7 @@ class Derivatives(object):
     def _make_jpeg(self, tiff_file, out_dir, out_name, height=None, width=None):
         """Make a Jpeg of max size height x width"""
 
-        op = ['convert', tiff_file]
+        op = ['convert', tiff_file, '-colorspace', 'rgb']
 
         output_file = os.path.join(out_dir, out_name + '.jpg')
 

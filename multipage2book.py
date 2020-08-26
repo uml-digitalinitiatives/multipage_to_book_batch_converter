@@ -155,7 +155,6 @@ def get_tiff(new_pdf, out_dir):
     new_pdf -- The full path to the PDF file
     out_dir -- The directory to save the single page Tiff to
     """
-    logger.debug("in get_tiff")
     resolution = options.resolution
     # Increase density by 25%, then resize to only 75%
     altered_resolution = int(resolution * 1.25)
@@ -167,9 +166,9 @@ def get_tiff(new_pdf, out_dir):
 
     if not os.path.exists(output_file):
         # Only run if the file doesn't exist.
-        logger.debug("Generating Tiff")
-        op = ['convert', '-density', str(altered_resolution), new_pdf, '-resize', '75%', '-colorspace', 'rgb', '-alpha',
-              'Off', output_file]
+        logger.debug("Generating Tiff from PDF")
+        op = ['convert', '-density', str(altered_resolution), new_pdf, '-alpha', 'Off', '-resize', '75%', '-colorspace',
+              'CMYK', output_file]
         if not Derivatives.do_system_call(op, logger=logger):
             quit()
     return output_file
