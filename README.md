@@ -70,23 +70,11 @@ optional arguments:
   --mods-extension MODS_EXTENSION
                         The extension of the MODS files existing in the above directory. Files are matched based on filename but with this extension. Defaults to 'mods'
   --output-dir OUTPUT_DIR
-<<<<<<< Updated upstream
-                        Directory to build books in, defaults to current
-                        directory.
-  --merge               Files that have the same name but with a numeric
-                        suffix are considered the same book and directories
-                        are merged. (ie. MyBook1.pdf and MyBook2.pdf)
-  --skip-derivatives    Only split the source file into the separate pages and
-                        directories, don't generate derivatives.
-  --mods-extension      The extension for the MODS files in your source directory.
-                        Either 'mods' or 'xml'. Defaults to 'mods'.
-=======
                         Directory to build books in, defaults to current directory.
   --merge               Files that have the same name but with a numeric suffix are considered the same book and directories are merged. (ie. MyBook1.pdf and MyBook2.pdf)
   --skip-derivatives    Only split the source file into the separate pages and directories, don't generate derivatives.
   --skip-hocr-ocr       Do not generate OCR/HOCR datastreams, this cannot be used with --skip-derivatives
   --skip-jp2            Do not generate JP2 datastreams, this cannot be used with --skip-derivatives
->>>>>>> Stashed changes
   -l {DEBUG,INFO,WARNING,ERROR,CRITICAL}, --loglevel {DEBUG,INFO,WARNING,ERROR,CRITICAL}
                         Set logging level, defaults to ERROR.
 ```
@@ -233,8 +221,7 @@ All of these scripts have usage arguments that can be revealed by running them w
 
 ## Acknowledgements
 
-`hocrpdf.py` is a modification/rewrite of [hocr-pdf](https://github.com/tmbdev/hocr-tools/blob/master/hocr-pdf) from  
-[tmbdev](https://github.com/tmbdev).
+`hocrpdf.py` is a modification/rewrite of [hocr-pdf](https://github.com/tmbdev/hocr-tools/blob/master/hocr-pdf) from [tmbdev](https://github.com/tmbdev).
 
 It has been modified to:
 
