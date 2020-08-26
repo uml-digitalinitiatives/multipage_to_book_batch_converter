@@ -79,9 +79,15 @@ optional arguments:
                         are merged. (ie. MyBook1.pdf and MyBook2.pdf)
   --skip-derivatives    Only split the source file into the separate pages and
                         directories, don't generate derivatives.
+  --mods-extension      The extension for the MODS files in your source directory.
+                        Either 'mods' or 'xml'. Defaults to 'mods'.
   -l {DEBUG,INFO,WARNING,ERROR,CRITICAL}, --loglevel {DEBUG,INFO,WARNING,ERROR,CRITICAL}
                         Set logging level, defaults to ERROR.
 ```
+
+Example - directory of PDFs and MODS XML files:
+
+`./multipage2book.py /path/to/pdfs --output-dir=/output/directory --skip-hocr-ocr --skip-jp2 --mods-extension=xml --mods-dir=/path/to/mods/files`
 
 #### Caveat
 
