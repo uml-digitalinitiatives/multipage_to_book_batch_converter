@@ -226,8 +226,8 @@ All of these scripts have usage arguments that can be revealed by running them w
 It has been modified to:
 
 1. make it a class for inclusion in other code
-1. modifications to the [calculation of the word box base](https://github.com/tmbdev/hocr-tools/blob/master/hocr-pdf#L103-L104)
-1. changed from using [`setTextOrigin()`](https://github.com/tmbdev/hocr-tools/blob/master/hocr-pdf#L108) to using `setTextTransform()` to assign the rotation of the box.
+1. modifications to the calculation of the word box base
+1. changed from using `setTextOrigin()` to using `setTextTransform()` to assign the rotation of the box.
 1. stopped using the included invisible font.
 1. set the font height to match the box height to get better word highlighting.
 1. switched from `lxml.etree` library to `xml.etree` library
