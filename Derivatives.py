@@ -89,12 +89,22 @@ class Derivatives(object):
                 op.extend(['-quiet', 'Clayers=5', 'Clevels=7',
                            'Cprecincts={256,256},{256,256},{256,256},{128,128},{128,128},{64,64},{64,64},{32,32},{16,16}',
                            'Corder=RPCL', 'ORGgen_plt=yes', 'ORGtparts=R', 'Cblk={32,32}', 'Cuse_sop=yes'])
+            # Temporary filename we might need below.
+            temp_tiff = os.path.join(os.path.dirname(tiff_file),
+                                     os.path.splitext(just_file)[0] + "_tmp" + os.path.splitext(just_file)[1])
             if not self.do_system_call(op, logger=self.logger):
+                # Remove the JP2.jp2 if it was created, because it will be bad.
+                os.remove(output_file)
                 if self.is_compressed(tiff_file) and not second_try:
                     # We failed, the tiff is compressed and we haven't tried with an uncompressed tiff
-                    temp_tiff = os.path.join(os.path.dirname(tiff_file),
-                                             os.path.splitext(just_file)[0] + "_tmp" + os.path.splitext(just_file)[1])
-                    op = ['convert', '-compress', 'None', tiff_file, temp_tiff]
+                    self.logger.info("Jpeg2000 creation failed. Tiff is compressed, trying with uncompressed tiff")
+                    op = ['convert', tiff_file, '-compress', 'None', temp_tiff]
+                    self.do_system_call(op, timeout=600, logger=self.logger)
+                    self._make_jpeg_2000(temp_tiff, out_dir, second_try=True)
+                elif not second_try and self.get_colorspace(tiff_file).lower()[-3:] != 'rgb':
+                    # We failed and its not a RGB Tiff, need to make one.
+                    self.logger.info("Jpeg2000 creation failed. Tiff has none RGB colorspace, trying with sRGB tiff")
+                    op = ['convert', tiff_file, '-colorspace', 'sRGB', temp_tiff]
                     self.do_system_call(op, timeout=600, logger=self.logger)
                     self._make_jpeg_2000(temp_tiff, out_dir, second_try=True)
                 else:
@@ -304,6 +314,13 @@ class Derivatives(object):
                 return True
         return False
 
+    def get_colorspace(self, image_file):
+        """Get the colorspace of the image"""
+        self.logger.debug("Getting colorspace of {}".format(image_file))
+        op = ['identify', '-format', '%[colorspace]', image_file]
+        result = self.do_system_call(ops=op, return_result=True, logger=self.logger)
+        return result.rstrip('\r\n')
+
     @staticmethod
     def do_system_call(ops, logger=None, return_result=False, timeout=60, fail_on_error=True):
         """Execute an external system call
@@ -341,6 +358,8 @@ class Derivatives(object):
                                                                                               e.stdout))
             return False
         if logger is not None:
+            if errs is not None:
+                logger.debug("Command stderr:\n{}".format(errs))
             logger.debug("Command result:\n{}".format(outs))
         if return_result:
             return outs
@@ -367,6 +386,8 @@ if __name__ == '__main__':
     parser.add_argument('process_dir', help="Paged content or single page directory")
     parser.add_argument('--single', action='store_true', dest="single_page", default=False,
                         help="Process as a single page instead of a directory of page directories.")
+    parser.add_argument('--overwrite', dest="overwrite", action='store_true', default=False,
+                        help='Overwrite any existing Tiff/PDF/OCR/Hocr files with new copies.')
     parser.add_argument('--resolution', dest="resolution", type=int, default=300,
                         help="Resolution of the source material, used when generating Tiff. Defaults to 300.")
     parser.add_argument('--use-hocr', dest="use_hocr", action='store_true', default=False,
