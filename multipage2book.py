@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.8
 # encoding: utf-8
 """
 Multipage 2 PDF to Islandora Book Batch converter
@@ -263,9 +263,15 @@ def parse_dir(the_dir):
     """
     files = [f for f in os.listdir(the_dir) if valid_extensions.search(f)]
     processed = list()
+    counter = 0
     for f in files:
         if f in processed:
             continue
+        if options.limit is not None and counter >= options.limit:
+            # We have hit the limit
+            logger.warning("Hit the --limit of {}, stopping".format(options.limit))
+            return
+        counter += 1
         book_name = os.path.splitext(os.path.split(f)[1])[0]
         if options.merge and re.search(r'\d+$', book_name) is not None:
             (book_name, book_number, junk) = re.split(r'(\d+)$', book_name)
@@ -311,7 +317,7 @@ def set_up(args):
             subprocess.run([prog.get('exec'), prog.get('check_var')], stdout=subprocess.DEVNULL,
                            stderr=subprocess.DEVNULL, check=True)
     except FileNotFoundError as e:
-        print("A required program could not be found: {}".format(e.strerror.split(':')[1]))
+        print("ERROR: A required program could not be found: {}".format(e.strerror.split(':')[1]))
         quit()
 
 
@@ -372,7 +378,10 @@ def main():
     parser.add_argument('--skip-jp2', dest="skip_jp2", action='store_true', default=False,
                         help='Do not generate JP2 datastreams, this cannot be used with --skip-derivatives')
     parser.add_argument('-l', '--loglevel', dest="debug_level", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-                        default='ERROR', help='Set logging level, defaults to ERROR.')
+                        default='WARNING', help='Set logging level, defaults to WARNING.')
+    parser.add_argument('--limit', dest="limit", default=None, help='Only process the first N pdfs/tiffs found in the'
+                                                                    '"files" directory. Does not work with --merge or '
+                                                                    'if "files" is not a directory')
     args = parser.parse_args()
 
     if not args.files[0] == '/':
@@ -394,6 +403,9 @@ def main():
     if args.merge and args.overwrite:
         parser.error("--merge and --overwrite are mutually exclusive options, you can only use one at a time.")
 
+    if args.merge and args.limit is not None:
+        parser.error("--merge and --limit are mutually exclusive options, you can only use one at a time.")
+
     if args.merge:
         print("Warning: merge attempts to combine multiple files that start with the same name and end with a digit "
               "before the extension. Files are sorted by the number and require an empty starting directory. If the "
@@ -409,9 +421,21 @@ def main():
         args.mods_extension = args.mods_extension.lstrip(".")
 
     if os.path.isfile(args.files) and valid_extensions.match(args.files):
+        if args.limit is not None:
+            # limit doesn't work for a single file.
+            parser.error("--limit only works if you specify a directory as the input.")
         set_up(args)
         process_file(args.files)
     elif os.path.isdir(args.files):
+        if args.limit is not None:
+            try:
+                if isinstance(args.limit, str):
+                    args.limit = int(args.limit)
+            except ValueError:
+                parser.error("--limit must be a positive integer.")
+            if isinstance(args.limit, int):
+                if args.limit < 1:
+                    parser.error("--limit must be a positive integer.")
         set_up(args)
         parse_dir(args.files)
     else:
