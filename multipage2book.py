@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.8
+#!/usr/bin/env python3
 # encoding: utf-8
 """
 Multipage 2 PDF to Islandora Book Batch converter
