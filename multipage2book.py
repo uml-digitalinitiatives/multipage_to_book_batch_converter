@@ -168,7 +168,7 @@ def get_tiff(new_pdf, out_dir):
         # Only run if the file doesn't exist.
         logger.debug("Generating Tiff from PDF")
         op = ['convert', '-density', str(altered_resolution), new_pdf, '-alpha', 'Off', '-resize', '75%', '-colorspace',
-              'CMYK', output_file]
+              'RGB', '-quality', '9', output_file]
         if not Derivatives.do_system_call(op, logger=logger):
             quit()
     return output_file
